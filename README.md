@@ -1,110 +1,144 @@
+# Keycloak Custom Theme with Maven in Rails 8
 
-#  Keycloak + OmniAuth in Rails 8
+## Prerequisites
+- Keycloak v26+ running
+- Basic Keycloak admin knowledge
+- Familiarity with FreeMarker templates (FTL)
+- Maven 3.6.3+
+- Java 21+
+- Rails 8 project for integration testing
+- Visual Studio Code
 
-A minimal example of integrating [Keycloak](https://www.keycloak.org/) authentication into a Ruby on Rails 8 application using the [OmniAuth](https://github.com/ccrockett/omniauth-keycloak) gem.
+## Overview
+Customize Keycloak login, account, and email screens to match your Rails app branding.
 
 ---
 
-## Clone this Repository
+## Quickstart: Keycloak + MailHog (Docker)
 
+
+### 1. Clean Docker
 ```bash
-git clone https://github.com/giljr/keycloak-omniauth.git
-cd keycloak-omniauth
+docker rm -f $(docker ps -a -q) && docker system prune -a
 ```
-## Setup Instructions
-### 1. Install Ruby and Bundler
-
-Make sure you have Ruby 3.4+ installed.
-Then install Bundler:
-
-    gem install bundler
-
-### 2. Install Dependencies
-
-    bundle install
-
-### 3. Configure Keycloak
-Remove any broken files (if needed)
+```bash
+docker network create demo-network
 ```
-rm config/credentials.yml.enc
-rm config/master.key
+### 2. Run Keycloak
+```bash
+docker run -d --name keycloak --network demo-network -p 8080:8080 \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+  -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+  quay.io/keycloak/keycloak:latest start-dev
 ```
-Create a new client in your Keycloak realm (e.g., quickstart).
-
-Set the Client ID and Client Secret in your Rails app Rails Credential file:
-
-`EDITOR="code --wait" rails credentials:edit`
-
-Paste:
+### 3. Run MailHog
+```bash
+docker run -d -p 8025:8025 --name demo-mail --network demo-network mailhog/mailhog
 ```
+
+### 4. Open Keycloak admin: localhost:8080 (admin/admin)
+
+#### 4.1 Create realm quickstart and client test-cli
+
+### 5 Configure client as OpenID Connect with your Rails app URLs
+
+#### 5.1 Rails Credentials
+```bash
+EDITOR="code --wait" rails credentials:edit
+```
+```code
 keycloak:
   client_id: your-client-id
-  client_secret: your-client-secret-id
+  client_secret: your-client-secret
   host: http://localhost
   port: 8080
-  realm: your-realm
+  realm: quickstart
   redirect_uri: http://localhost:3000/auth/keycloak/callback
 
-
-secret_key_base: c06b40... c568bf649c87ea10 (Do not edit)
+secret_key_base: <generated>
 ```
-### 4.Configure in Keycloak:
+### 6. Build Keycloak Theme with Maven
 
-```yml
-Client ID: test-cli
-
-Client type: OpenID Connect
-
-Root URL: http://localhost:3000
-
-Valid redirect URIs: http://localhost:3000/auth/keycloak/callback
-                     http://localhost:3000/auth/keycloak_openid/callback
-
-Valid post logout redirect URIs: http://localhost:3000/logout_success/*
-
-Web origins: http://localhost:3000
-
-Admin URL: http://localhost:3000
-
-Capability config
-
-Client authentication: on
-
-Authentication flow
-
-Standard flow: on
-Direct access grants: on
-
-Logout settings
-
-Front channel logout: on
-
-Front-channel logout session required: on
+#### 6.1 Generate Maven project
+```maven
+mvn archetype:generate \
+  -DgroupId=com.bootlabs \
+  -DartifactId=keycloak-custom-theme \
+  -DarchetypeArtifactId=maven-archetype-quickstart \
+  -DinteractiveMode=false
 ```
-### 5. Run the Rails App
+#### 6.2  Remove default Java sources
+```bash
+rm -rf src/
+mkdir -p src/main/resources/theme/keycloak-custom-theme/login
+```
+### 7. Key Files
 
-    bin/dev
+    login/login.ftl → Login page template
 
-Your app should now be available at http://localhost:3000.
+    login/resources/css/login.css → Styles
 
-Login Flow
+    login/resources/img/logo.png → Logo
 
-    Click the Login with Keycloak button.
+    theme.properties → Theme metadata
 
-    Authenticate via Keycloak.
+    scripts/update-footer.sh → Footer script with Git commit/version
 
-    You’ll be redirected back to Rails with a valid session.
+### 8. Update Footer Script
+```bash
+#!/bin/bash
+set -e
+GIT_HASH=$(git rev-parse --short HEAD)
+DATE=$(date +"%Y-%m-%d")
+YEAR=$(date +"%Y")
+FOOTER_FILE="src/main/resources/theme/keycloak-custom-theme/login/footer.ftl"
+cat <<EOF > "$FOOTER_FILE"
+<#macro content>
+<footer id="kc-footer" style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:1rem;font-size:0.85rem;color:#666;">
+<p>&copy; $YEAR Company inc — All right reserved.</p>
+<p>Version $GIT_HASH ($DATE)</p>
+<p>Support: <a href="mailto:support@org.inc">support@org.inc</a></p>
+</footer>
+</#macro>
+EOF
+echo "✅ Footer updated successfully in $FOOTER_FILE"
+```
+### 9. Build & Deploy Theme
+```bash
+mvn clean install
+```
+This runs update-footer.sh and packages the theme as a JAR
 
-Notes
+Theme is deployed to Keycloak Docker container via Maven exec plugin
 
-    Turbo is disabled on the login button to avoid issues with OmniAuth redirects.
+### 10. Activate Theme
 
-    Tested on Rails 8.0.2 and Ruby 3.4.4.
+Go to `Keycloak > Realm quickstart > Client test-cli > Realm settings > Themes`
+
+Set `Login Theme` to `keycloak-custom-theme` and **save**
+
+### 10. Test
+
+Run Rails app:
+```bash
+bin/dev
+```
+Visit `localhost:3000` and click `Login with Keycloak`
+
+### 11. Check email via localhost:8025 (MailHog)
+
+
+### 12. References
+
+[Tutorial: OmniAuth with Keycloak in Rails 8]()
+
 ## Acknowledgements
 
  - [Omniauth::Keycloak](https://github.com/ccrockett/omniauth-keycloak)
  - [Jeovan Farias](https://www.linkedin.com/in/jeovan-f-6283b8145/)
  - [Keycloak For beginers](https://medium.com/jungletronics/keycloak-identity-provider-192ffd9a00ae)
+
+
 
 
 ## License
