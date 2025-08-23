@@ -24,7 +24,11 @@ Then install Bundler:
     bundle install
 
 ### 3. Configure Keycloak
-
+Remove any broken files (if needed)
+```
+rm config/credentials.yml.enc
+rm config/master.key
+```
 Create a new client in your Keycloak realm (e.g., quickstart).
 
 Set the Client ID and Client Secret in your Rails app Rails Credential file:
